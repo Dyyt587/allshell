@@ -643,9 +643,9 @@ void shellListItem(Shell *shell, ShellCommand *item)
 
     spaceLength = 22 - shellWriteString(shell, shellGetCommandName(item));
     spaceLength = (spaceLength > 0) ? spaceLength : 4;
-    do {
-        shellWriteByte(shell, ' ');
-    } while (--spaceLength);
+		char str[22] = " ";
+		memset(str,' ',spaceLength);
+		str[spaceLength]=0;
     if (item->attr.attrs.type <= SHELL_TYPE_CMD_FUNC)
     {
         shellWriteString(shell, shellText[SHELL_TEXT_TYPE_CMD]);
