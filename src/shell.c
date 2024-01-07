@@ -643,7 +643,7 @@ void shellListItem(Shell *shell, ShellCommand *item)
 
     spaceLength = 22 - shellWriteString(shell, shellGetCommandName(item));
     spaceLength = (spaceLength > 0) ? spaceLength : 4;
-    
+
 	char str[22] = " ";
 	memset(str,' ',spaceLength);
 	str[spaceLength]=0;
@@ -669,11 +669,21 @@ void shellListItem(Shell *shell, ShellCommand *item)
         shellWriteString(shell, shellText[SHELL_TEXT_TYPE_NONE]);
     }
 #if SHELL_HELP_SHOW_PERMISSION == 1
-    shellWriteString(shell, "  ");
+    //shellWriteString(shell, "  ");
+
+    //char str[9];
+    str[0]=' ';
     for (signed char i = 7; i >= 0; i--)
     {
-        shellWriteByte(shell, item->attr.attrs.permission & (1 << i) ? 'x' : '-');
+        str[i+1]=item->attr.attrs.permission & (1 << i) ? 'x' : '-';
+
+        //shellWriteByte(shell, item->attr.attrs.permission & (1 << i) ? 'x' : '-');
     }
+    str[9]=' ';
+    str[10]=' ';
+    str[11]=0;
+    shellWriteString(shell, str);
+
 #endif
     shellWriteString(shell, "  ");
     shellWriteCommandDesc(shell, shellGetCommandDesc(item));
@@ -823,7 +833,8 @@ void shellClearCommandLine(Shell *shell)
 void shellInsertByte(Shell *shell, char data)
 {
     /* 判断输入数据是否过长 */
-    if (shell->parser.length >= shell->parser.bufferSize - 1)
+    //if (shell->parser.length >= shell->parser.bufferSize - 1)
+    if (shell->parser.length+1 >= shell->parser.bufferSize)
     {
         shellWriteString(shell, shellText[SHELL_TEXT_CMD_TOO_LONG]);
         shellWritePrompt(shell, 1);
@@ -853,10 +864,26 @@ void shellInsertByte(Shell *shell, char data)
             shellWriteByte(shell, 
                            shell->status.isChecked ? shell->parser.buffer[i] : '*');
         }
-        for (short i = shell->parser.length - shell->parser.cursor; i > 0; i--)
-        {
-            shellWriteByte(shell, '\b');
+        // for (short i = shell->parser.length - shell->parser.cursor; i > 0; i--)
+        // {
+        //     shellWriteByte(shell, '\b');
+        // }
+        char str[16];
+        int strLength = shell->parser.length - shell->parser.cursor + 1;
+        int batchSize = sizeof(str); // Set the batch size as desired
+        int numBatches = (strLength + batchSize - 1) / batchSize;
+        int remainingChars = strLength;
+        for (int i = 0; i < numBatches; i++) {
+            int currentBatchSize = (remainingChars < batchSize) ? remainingChars : batchSize;
+            str[currentBatchSize] = '\0';
+            for (int j = currentBatchSize - 1; j >= 0; j--) {
+                str[j] = '\b';
+            }
+            shellWriteString(shell, str);
+            remainingChars -= currentBatchSize;
         }
+    }else{
+        while(1);//do not achieve
     }
 }
 
@@ -1821,10 +1848,12 @@ void shellHandler(Shell *shell, char data)
                     || (base[i].data.key.value & (0xFF << (keyByteOffset - 8)))
                         == 0x00000000)
                 {
+                    /*找到按键啦*/
                     if (base[i].data.key.function)
                     {
                         base[i].data.key.function(shell);
                     }
+                    /*清除复位*/
                     shell->parser.keyValue = 0x00000000;
                     break;
                 }
@@ -1834,6 +1863,7 @@ void shellHandler(Shell *shell, char data)
 
     if (data != 0x00)
     {
+        /*待验证，多余的语句*/
         shell->parser.keyValue = 0x00000000;
         shellNormalInput(shell, data);
     }
@@ -1847,25 +1877,26 @@ void shellHandler(Shell *shell, char data)
 
 
 #if SHELL_SUPPORT_END_LINE == 1
-void shellWriteEndLine(Shell *shell, char *buffer, int len)
+void shellWriteEndLine(Shell *shell, const char *buffer, int len)
 {
     SHELL_LOCK(shell);
     if (!shell->status.isActive)
     {
+        //清除原来的数据
         shellWriteString(shell, shellText[SHELL_TEXT_CLEAR_LINE]);
     }
     shell->write(buffer, len);
 
     if (!shell->status.isActive)
     {
+        //恢复原来的数据
         shellWritePrompt(shell, 0);
         if (shell->parser.length > 0)
         {
             shellWriteString(shell, shell->parser.buffer);
-            for (short i = 0; i < shell->parser.length - shell->parser.cursor; i++)
-            {
-                shellWriteByte(shell, '\b');
-            }
+            char cursorMove[8];
+            snprintf(cursorMove,sizeof(cursorMove),"\033[%dD", shell->parser.length - shell->parser.cursor);
+            shellWriteString(shell, cursorMove);
         }
     }
     SHELL_UNLOCK(shell);
